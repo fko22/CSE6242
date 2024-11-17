@@ -1,0 +1,1 @@
+{"Linear Regression": {"MAPE": 0.12746619652008837, "Cross-Validation Mean": -103.74259083923843}, "Random Forest": {"MAPE": 0.4140128457386685, "Cross-Validation Mean": -98.63811003801601}, "Gradient Boosting": {"MAPE": 0.6435723355602063, "Cross-Validation Mean": -98.44953178226743}}
