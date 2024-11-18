@@ -6,4 +6,4 @@ networkx==3.1
 matplotlib==3.7.2
 geopandas==0.14.4
 fiona==1.9.6
-folium==0.12.1
+streamlit_folium==0.23.2

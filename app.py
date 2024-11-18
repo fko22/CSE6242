@@ -1,8 +1,9 @@
 import streamlit as st
+from streamlit_folium import st_folium
 import pandas as pd
 import networkx as nx
 import matplotlib.pyplot as plt
-from pyvis.network import Network
+from shapely.geometry import Point, Polygon
 import geopandas as gpd
 import joblib
 import json
@@ -23,6 +24,22 @@ def extract_zip(filename):
     os.remove(csv_path)
     return data
 
+def get_state_boundaries(state, state_geojson):
+    # Fetch state boundary coordinates from geojson
+    state_data = state_geojson[state_geojson['state'] == state]
+    if not state_data.empty:
+        boundary = state_data['geometry'].values[0]
+        return Polygon(boundary['coordinates'][0])
+    return None
+
+# Function to check if the node is within the state's boundary
+def is_within_boundary(lat, lon, state, state_geojson):
+    state_boundary = get_state_boundaries(state, state_geojson)
+    if state_boundary:
+        point = Point(lon, lat)
+        return state_boundary.contains(point)
+    return False
+
 # Load edges_with_MAPE.csv
 @st.cache_data
 def load_edges_with_mape():
@@ -33,75 +50,84 @@ def load_edges_with_mape():
 def load_state_coordinates():
     return extract_zip("state_coordinates")
 
-# Function to visualize the network
-def visualize_network(edges_df, state_coords):
-    G = nx.DiGraph()
-    
-    # Add nodes with MAPE as an attribute
-    for _, row in edges_df.iterrows():
-        G.add_node(row['node1'], MAPE=row['MAPE_node1'])
-        G.add_node(row['node2'], MAPE=row['MAPE_node2'])
-        G.add_edge(row['node1'], row['node2'], weight=row['abs_diff'])
-    
-    # Node colors based on MAPE
-    node_colors = [G.nodes[node]['MAPE'] for node in G.nodes]
-    
-    # Format edge labels to two decimal places
-    edge_labels = {
-        (u, v): f"{d['weight']:.4f}" for u, v, d in G.edges(data=True)
-    }
-    
-    # Draw the network
-    plt.figure(figsize=(10, 8))
-    pos = nx.spring_layout(G, k=0.75, iterations=300)
-    nx.draw(
-        G,
-        pos,
-        with_labels=True,
-        node_color=node_colors,
-        cmap=plt.cm.viridis,
-        node_size=1000,
-        edge_color="gray",
-        font_size=10,
-    )
-    nx.draw_networkx_edge_labels(
-        G, pos, edge_labels=edge_labels, font_size=8
-    )
-    plt.colorbar(plt.cm.ScalarMappable(cmap=plt.cm.viridis), label="MAPE")
-    st.pyplot(plt)
+@st.cache_data
+def load_forcast_with_state():
+    return extract_zip("EIA930LoadAndForecast_with_states")
+
 
 # Function to visualize map with nodes and edges on Folium
-def visualize_map_with_edges(state_coords, edges_df):
+def visualize_map_with_edges(state_coords, edges_df, load_forecast_df):
     # Create a folium map centered on the US
     us_map = folium.Map(location=[37.0902, -95.7129], zoom_start=4)
 
-    # Create markers for each state based on latitude and longitude
-    for _, row in state_coords.iterrows():
-        folium.CircleMarker(
-            location=[row['latitude'], row['longitude']],
-            radius=8,
-            color='blue',
-            fill=True,
-            fill_color='blue',
-            fill_opacity=0.6,
-            popup=row['STUSPS']
-        ).add_to(us_map)
+    # Create a lookup dictionary for state coordinates
+    coords_dict = state_coords.set_index('state')[['latitude', 'longitude']].to_dict('index')
 
-    # Draw edges between states (nodes) using lines
+    # Extract unique nodes and map them to states using the load forecast data
+    nodes = set(edges_df['node1']).union(set(edges_df['node2']))
+    node_to_state = load_forecast_df.set_index('respondent')['state'].to_dict()
+    # Map nodes to their respective states
+    node_states = {node: node_to_state.get(node) for node in nodes if node in node_to_state}
+    # Group nodes by state
+    state_to_nodes = {}
+    node_offsets = {}
+    for node, state in node_states.items():
+        if state in coords_dict:
+            if state not in state_to_nodes:
+                state_to_nodes[state] = []
+            state_to_nodes[state].append(node)
+
+# Add markers for each valid node
+    offset = .5  # Increased offset value for latitude/longitude
+    node_radius = 7  # Increased radius for larger markers
+    for node, state in node_states.items():
+        if state in coords_dict:
+            if state not in state_to_nodes:
+                state_to_nodes[state] = []
+
+            # Calculate offset for the node based on its index in the state's nodes
+            index = len(state_to_nodes[state])
+            lat_offset = coords_dict[state]['latitude'] + (index % 3) * offset
+            lon_offset = coords_dict[state]['longitude'] + (index // 3) * offset
+
+            # Add the node's offset to the mapping
+            node_offsets[node] = (lat_offset, lon_offset)
+
+            # Add the node to the state's list
+            state_to_nodes[state].append(node)
+
+            # Add a marker for the node
+            folium.CircleMarker(
+                location=[lat_offset, lon_offset],
+                radius=node_radius,
+                color='blue',
+                fill=True,
+                fill_color='blue',
+                fill_opacity=0.8,
+                popup=f"{node} ({state})"
+            ).add_to(us_map)
+
+    # Add edges between valid nodes using offset positions
     for _, row in edges_df.iterrows():
-        node1 = row['node1']
-        node2 = row['node2']
+        node1, node2 = row['node1'], row['node2']
 
-        # Get coordinates for node1 and node2
-        lat1, lon1 = state_coords[state_coords['STUSPS'] == node1][['latitude', 'longitude']].values[0]
-        lat2, lon2 = state_coords[state_coords['STUSPS'] == node2][['latitude', 'longitude']].values[0]
+        if node1 in node_offsets and node2 in node_offsets:
+            lat1, lon1 = node_offsets[node1]
+            lat2, lon2 = node_offsets[node2]
 
-        # Draw a line between the two states
-        folium.PolyLine([(lat1, lon1), (lat2, lon2)], color='gray', weight=2, opacity=0.6).add_to(us_map)
+            # Draw the edge using the offset positions
+            folium.PolyLine(
+                [(lat1, lon1), (lat2, lon2)],
+                color='gray',
+                weight=3,  # Slightly thicker edges
+                opacity=0.6
+            ).add_to(us_map)
+        else:
+            st.warning(f"Missing offset mapping for nodes: {node1}, {node2}")
 
     # Display the map in Streamlit
     st.subheader("US States Map with Nodes and Edges")
-    folium_static(us_map)
+    st_folium(us_map, width=800, height=600)  # Adjust map dimensions
 
 # Load evaluation results from the saved JSON file
 def load_evaluation_results():
@@ -137,14 +163,15 @@ def main():
     models = load_models()
     edges_df = load_edges_with_mape()
     state_coords = load_state_coordinates()
+    respondent_with_state = load_forcast_with_state()
 
     # Visualization of network
     st.subheader("Network Visualization of Node Relationships")
     st.write("This graph shows the relationships between nodes with MAPE values and their absolute differences.")
-    visualize_network(edges_df, state_coords)
+    # visualize_network(edges_df, state_coords)
 
     # Visualization of map with nodes and edges
-    visualize_map_with_edges(state_coords, edges_df)
+    visualize_map_with_edges(state_coords, edges_df, respondent_with_state)
 
     # Select the best model based on MAPE
     best_model_name = select_best_model(evaluation_results)
