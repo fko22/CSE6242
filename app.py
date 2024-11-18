@@ -7,16 +7,31 @@ import geopandas as gpd
 import joblib
 import json
 import folium
+import zipfile
+import os 
+
+def extract_zip(filename):
+    csv_path = f"./data/{filename}.csv"
+    zip_path = f"./data/{filename}.zip"
+
+    with zipfile.ZipFile(zip_path, 'r') as zipf:
+        zipf.extractall("./data/")
+        print(f"Files extracted to: {csv_path}")
+
+    data = pd.read_csv(f"./data/{filename}.csv")
+
+    os.remove(csv_path)
+    return data
 
 # Load edges_with_MAPE.csv
 @st.cache_data
 def load_edges_with_mape():
-    return pd.read_csv("./data/edges_with_MAPE.csv")
+    return extract_zip("edges_with_MAPE")
 
 # Load state coordinates from CSV
 @st.cache_data
 def load_state_coordinates():
-    return pd.read_csv("./data/state_coordinates.csv")  # Make sure this CSV has 'STUSPS', 'latitude', 'longitude'
+    return extract_zip("state_coordinates")
 
 # Function to visualize the network
 def visualize_network(edges_df, state_coords):
