@@ -5,18 +5,15 @@ from shapely.geometry import Point
 import folium
 import zipfile
 import os
+import tempfile
 
 
 # Utility function to extract CSV from a ZIP file
 def extract_zip(filename, data_dir="./data/"):
-    csv_path = f"{data_dir}{filename}.csv"
-    zip_path = f"{data_dir}{filename}.zip"
-
-    with zipfile.ZipFile(zip_path, 'r') as zipf:
-        zipf.extractall(data_dir)
-
-    data = pd.read_csv(csv_path)
-    os.remove(csv_path)  # Clean up extracted CSV file
+    with zipfile.ZipFile(f"{data_dir}{filename}.zip", 'r') as zipf:
+        with tempfile.NamedTemporaryFile(delete=False) as tmp_csv:
+            zipf.extract(f"{filename}.csv", tmp_csv.name)
+            data = pd.read_csv(tmp_csv.name)
     return data
 
 
