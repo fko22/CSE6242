@@ -1,12 +1,9 @@
 import streamlit as st
 from streamlit_folium import st_folium
 import pandas as pd
-from shapely.geometry import Point
 import folium
 import zipfile
 import os
-import tempfile
-
 
 # Utility function to extract CSV from a ZIP file
 def extract_zip(filename, data_dir="./data/"):
@@ -36,10 +33,10 @@ def load_state_coordinates():
 def load_forecast_with_state():
     return extract_zip("EIA930LoadAndForecast_with_states")
 
+
 @st.cache_data
 def load_ba_lat_long():
     return extract_zip("Balancing_Authority_Lat_Long")
-
 
 # Function to visualize map with nodes and edges on Folium
 def visualize_map_with_edges(edges_df, ba_lat_long):
@@ -88,13 +85,10 @@ def visualize_map_with_edges(edges_df, ba_lat_long):
                 opacity=0.6,
                 tooltip=tooltip
             ).add_to(us_map)
-        else:
-            st.warning(f"Missing coordinate mapping for nodes: {node1}, {node2}")
 
     # Render the map in Streamlit
     st.subheader("US States Map with Nodes and Edges")
     st_folium(us_map, width=800, height=600)
-
 
 # Main app
 st.title("EIA 930 Demand Forecast Visualization")
