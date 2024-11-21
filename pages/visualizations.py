@@ -10,10 +10,14 @@ import tempfile
 
 # Utility function to extract CSV from a ZIP file
 def extract_zip(filename, data_dir="./data/"):
-    with zipfile.ZipFile(f"{data_dir}{filename}.zip", 'r') as zipf:
-        with tempfile.NamedTemporaryFile(delete=False) as tmp_csv:
-            zipf.extract(f"{filename}.csv", tmp_csv.name)
-            data = pd.read_csv(tmp_csv.name)
+    csv_path = f"{data_dir}{filename}.csv"
+    zip_path = f"{data_dir}{filename}.zip"
+
+    with zipfile.ZipFile(zip_path, 'r') as zipf:
+        zipf.extractall(data_dir)
+
+    data = pd.read_csv(csv_path)
+    os.remove(csv_path)
     return data
 
 
@@ -32,59 +36,60 @@ def load_state_coordinates():
 def load_forecast_with_state():
     return extract_zip("EIA930LoadAndForecast_with_states")
 
+@st.cache_data
+def load_ba_lat_long():
+    return extract_zip("Balancing_Authority_Lat_Long")
+
 
 # Function to visualize map with nodes and edges on Folium
-def visualize_map_with_edges(state_coords, edges_df, load_forecast_df):
+def visualize_map_with_edges(edges_df, ba_lat_long):
     # Initialize Folium map
     us_map = folium.Map(location=[37.0902, -95.7129], zoom_start=4)
 
-    # Create a lookup dictionary for state coordinates
-    coords_dict = state_coords.set_index('state')[['latitude', 'longitude']].to_dict('index')
+    # Create a lookup dictionary for latitude and longitude by ba_code
+    ba_coords = ba_lat_long.set_index('ba_code')[['lat', 'lng']].to_dict('index')
 
-    # Map nodes to their respective states using load forecast data
-    node_to_state = load_forecast_df.set_index('respondent')['state'].to_dict()
+    # Map nodes to coordinates based on ba_code
     nodes = set(edges_df['node1']).union(set(edges_df['node2']))
-    node_states = {node: node_to_state.get(node) for node in nodes if node in node_to_state}
+    node_coords = {node: ba_coords.get(node) for node in nodes if node in ba_coords}
 
-    # Prepare node offsets and group nodes by state
-    state_to_nodes, node_offsets = {}, {}
-    offset, node_radius = 0.5, 7  # Offset for latitude/longitude and marker radius
-
-    for node, state in node_states.items():
-        if state in coords_dict:
-            if state not in state_to_nodes:
-                state_to_nodes[state] = []
-
-            # Compute position offset based on the node index in its state
-            index = len(state_to_nodes[state])
-            lat_offset = coords_dict[state]['latitude'] + (index % 3) * offset
-            lon_offset = coords_dict[state]['longitude'] + (index // 3) * offset
-
-            # Store offset and add marker
-            node_offsets[node] = (lat_offset, lon_offset)
-            state_to_nodes[state].append(node)
+    # Add markers for nodes
+    for node, coords in node_coords.items():
+        if coords:
             folium.CircleMarker(
-                location=[lat_offset, lon_offset],
-                radius=node_radius,
+                location=[coords['lat'], coords['lng']],
+                radius=7,  # Node marker radius
                 color='blue',
                 fill=True,
                 fill_color='blue',
                 fill_opacity=0.8,
-                popup=f"{node} ({state})"
+                popup=f"{node}"
             ).add_to(us_map)
 
     # Draw edges between valid nodes
     for _, row in edges_df.iterrows():
         node1, node2 = row['node1'], row['node2']
-        if node1 in node_offsets and node2 in node_offsets:
+        if node1 in node_coords and node2 in node_coords:
+            lat1, lon1 = node_coords[node1]['lat'], node_coords[node1]['lng']
+            lat2, lon2 = node_coords[node2]['lat'], node_coords[node2]['lng']
+
+            tooltip = (
+                f"Respondent 1: {row['respondent_x']}<br>"
+                f"MAPE Node 1: {row['MAPE_node1']:.3f}<br>"
+                f"Respondent 2: {row['respondent_y']}<br>"
+                f"MAPE Node 2: {row['MAPE_node2']:.3f}<br>"
+                f"Absolute Difference: {row['abs_diff'] * 100:.2f}%"
+            )
+
             folium.PolyLine(
-                [node_offsets[node1], node_offsets[node2]],
+                [(lat1, lon1), (lat2, lon2)],
                 color='gray',
                 weight=3,
-                opacity=0.6
+                opacity=0.6,
+                tooltip=tooltip
             ).add_to(us_map)
         else:
-            st.warning(f"Missing offset mapping for nodes: {node1}, {node2}")
+            st.warning(f"Missing coordinate mapping for nodes: {node1}, {node2}")
 
     # Render the map in Streamlit
     st.subheader("US States Map with Nodes and Edges")
@@ -96,8 +101,7 @@ st.title("EIA 930 Demand Forecast Visualization")
 
 # Load data
 edges_df = load_edges_with_mape()
-state_coords = load_state_coordinates()
-respondent_with_state = load_forecast_with_state()
+ba_lat_long = load_ba_lat_long()
 
 # Map visualization
-visualize_map_with_edges(state_coords, edges_df, respondent_with_state)
+visualize_map_with_edges(edges_df, ba_lat_long)
