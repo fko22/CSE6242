@@ -2,18 +2,25 @@ import streamlit as st
 import pandas as pd
 import joblib
 import json
+import os
+import zipfile
+import gzip
+import pickle
 
-@st.cache_data
 def load_evaluation_results():
     with open("./data/evaluation_results.json", "r") as file:
         return json.load(file)
     
-# Load different models
-@st.cache_resource
+def load_gzip_pkl(model_name):
+    file_path = f"./models/{model_name}.pkl.gz"
+    with gzip.open(file_path, 'rb') as f:
+        model = pickle.load(f)
+    return model
+    
 def load_models():
-    linear_regression = joblib.load("./models/linear_regression_model.pkl")
-    random_forest = joblib.load("./models/random_forest_model.pkl")
-    gradient_boosting_model = joblib.load("./models/gradient_boosting_model.pkl")
+    linear_regression = load_gzip_pkl("linear_regression_model")
+    random_forest = load_gzip_pkl("random_forest_model")
+    gradient_boosting_model = load_gzip_pkl("gradient_boosting_model")
     return linear_regression, random_forest, gradient_boosting_model
     
 # Function to select the best model based on MAPE
@@ -23,7 +30,6 @@ def select_best_model(evaluation_results):
 
 # Function to make predictions using the model
 def predict_ldwp(model, input_data):
-    # Ensure input_data is a DataFrame
     input_df = pd.DataFrame([input_data])
     prediction = model.predict(input_df)
     return prediction[0]
@@ -41,7 +47,6 @@ best_model = models[
 st.subheader("Selected Best Model")
 st.write(f"**Model:** {best_model_name}")
 st.write(f"**MAPE:** {evaluation_results[best_model_name]['MAPE']:.4f}")
-st.write(f"**Cross-Validation Mean Score:** {evaluation_results[best_model_name]['Cross-Validation Mean']:.4f}")
 
 # Display other models and their performance
 st.subheader("Other Models and Their MAPE")
@@ -49,7 +54,6 @@ for model_name, metrics in evaluation_results.items():
     if model_name != best_model_name:
         st.write(f"**{model_name}:**")
         st.write(f"MAPE: {metrics['MAPE']:.4f}")
-        st.write(f"Cross-Validation Mean Score: {metrics['Cross-Validation Mean']:.4f}")
         st.write("---")
 
 # Input features for prediction

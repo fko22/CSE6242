@@ -5,7 +5,6 @@ import folium
 import zipfile
 import os
 
-# Utility function to extract CSV from a ZIP file
 def extract_zip(filename, data_dir="./data/"):
     csv_path = f"{data_dir}{filename}.csv"
     zip_path = f"{data_dir}{filename}.zip"
@@ -18,7 +17,6 @@ def extract_zip(filename, data_dir="./data/"):
     return data
 
 
-# Cached data loaders
 @st.cache_data
 def load_edges_with_mape():
     return extract_zip("edges_with_MAPE")
@@ -38,9 +36,7 @@ def load_forecast_with_state():
 def load_ba_lat_long():
     return extract_zip("Balancing_Authority_Lat_Long")
 
-# Function to visualize map with nodes and edges on Folium
 def visualize_map_with_edges(edges_df, ba_lat_long):
-    # Initialize Folium map
     us_map = folium.Map(location=[37.0902, -95.7129], zoom_start=4)
 
     # Create a lookup dictionary for latitude and longitude by ba_code
