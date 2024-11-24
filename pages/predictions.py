@@ -61,8 +61,8 @@ st.subheader("Predict LDWP Demand")
 st.write("Enter the feature values below to predict the LDWP demand:")
 
 # Feature inputs
-LDWP_lag1 = st.number_input("LDWP Lag 1 (previous period)", value=0.0, step=0.1)
-LDWP_lag24 = st.number_input("LDWP Lag 24 (24 hours prior)", value=0.0, step=0.1)
+LDWP_lag1 = st.number_input("LDWP Lag 1", value=0.0, step=0.1)
+LDWP_lag24 = st.number_input("LDWP Lag 24", value=0.0, step=0.1)
 CISO = st.number_input("CISO", value=0.0, step=0.1)
 BPAT = st.number_input("BPAT", value=0.0, step=0.1)
 PACE = st.number_input("PACE", value=0.0, step=0.1)
