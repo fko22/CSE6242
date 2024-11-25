@@ -2,6 +2,7 @@
 Welcome to the EIA 930 Forecast Analysis App
 Included in this repo is all the code needed to run the EIA 930 Forecast Analysis App locally. You can also visit https://cse6242-eia-demand-forcast.streamlit.app/ to use the app anywhere. 
 
+# Description
 Below is a breakdown of the files and folders included:
 
 **pages folder:** Includes all of the files needed to populate the app pages. The name of the file is the name of the page in the app.
@@ -16,9 +17,15 @@ Below is a breakdown of the files and folders included:
 
 **requirements.txt:** Packages required to run app
 
-Steps to run app locally: 
+# Installation: 
 1. Clone the repository
 2. Create enviroment using conda: `conda create --name CSE6242-Project-Env python=3.9.2`
 3. `conda activate CSE6242-Project-Env`
 4. Install the required packages using the following command: `pip install -r requirements.txt`
 5. Run streamlit app using the following command: `streamlit run app.py`
+
+# Execution
+Navigate to desired page to view content. If you want to predict the load for LAWP go to predictions page and fill in required data. 
+
+# Demo
+https://youtu.be/A2_w1u00YAg
